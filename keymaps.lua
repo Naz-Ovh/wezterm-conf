@@ -199,6 +199,29 @@ function M.apply(config)
 
   config.disable_default_key_bindings = false -- keep WezTerm's other sensible defaults
 
+  -- ── Links ──────────────────────────────────────────────
+  -- WezTerm's defaults open a link on a plain click (only if the mouse didn't
+  -- move, and only when the program isn't capturing the mouse) or Shift+click
+  -- (inside mouse-capturing programs like vim/htop). Ctrl+click — the Windows
+  -- Terminal / VS Code habit — does nothing by default, so add it, both for
+  -- normal panes and for programs that capture the mouse. The Down event is
+  -- swallowed so the program never sees half a click.
+  config.mouse_bindings = {}
+  for _, reporting in ipairs({ false, true }) do
+    table.insert(config.mouse_bindings, {
+      event = { Up = { streak = 1, button = 'Left' } },
+      mods = 'CTRL',
+      mouse_reporting = reporting,
+      action = act.OpenLinkAtMouseCursor,
+    })
+    table.insert(config.mouse_bindings, {
+      event = { Down = { streak = 1, button = 'Left' } },
+      mods = 'CTRL',
+      mouse_reporting = reporting,
+      action = act.Nop,
+    })
+  end
+
   -- Confirmation (Ctrl+W, middle-clicking a tab, a fancy-bar ×) is
   -- skipped only when the pane runs nothing but a plain shell. To Windows a
   -- WSL pane is always wsl.exe, so in WSL it always asks — intentionally.

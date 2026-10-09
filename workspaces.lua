@@ -52,9 +52,9 @@ local projects = {
     workspace = 'fugitives.club',
     cwd = path('jobs/altlantis/fugitive-club/Fugitive_Workspace'),
     panes = {
-      { id = 'client', cwd = path('jobs/altlantis/fugitive-club/Fugitive_Workspace/Fugitive_Client') },
-      { id = 'server', from = 'client', dir = 'Right',  size = 0.50, cwd = path('jobs/altlantis/fugitive-club/Fugitive_Workspace/Fugitive_Server') },
-      { id = 'server2', from = 'server', dir = 'Bottom', size = 0.50, cwd = path('jobs/altlantis/fugitive-club/Fugitive_Workspace/Fugitive_Server') },
+      { id = 'client', cwd = path('jobs/altlantis/fugitive-club/Fugitive_Workspace/Client') },
+      { id = 'server', from = 'client', dir = 'Right',  size = 0.50, cwd = path('jobs/altlantis/fugitive-club/Fugitive_Workspace/Server') },
+      { id = 'server2', from = 'server', dir = 'Bottom', size = 0.50, cwd = path('jobs/altlantis/fugitive-club/Fugitive_Workspace/Server') },
     },
   },
 }
