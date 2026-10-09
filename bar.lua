@@ -106,7 +106,34 @@ local PROGS = {
   vifm             = nf.md_folder_outline,
   lf               = nf.md_folder_outline,
   ranger           = nf.md_folder_outline,
+  npm              = nf.dev_npm or nf.md_npm,
+  npx              = nf.dev_npm or nf.md_npm,
+  pnpm             = nf.dev_npm or nf.md_npm,
 }
+
+-- ── WSL distro -> logo ────────────────────────────────────────────
+-- To Windows every WSL tab is just wsl.exe, so a WSL tab's default icon (and
+-- the host pill) shows its distro instead. Matched as a lowercase substring
+-- of the distro name ('fedora' -> FedoraLinux-44); unknown distros get Tux.
+local DISTROS = {
+  { 'fedora', nf.linux_fedora },     { 'ubuntu', nf.linux_ubuntu },
+  { 'debian', nf.linux_debian },     { 'arch', nf.linux_archlinux },
+  { 'opensuse', nf.linux_opensuse }, { 'alpine', nf.linux_alpine },
+  { 'kali', nf.linux_kali_linux },
+}
+
+-- 'WSL:FedoraLinux-44' -> 'FedoraLinux-44'; nil for non-WSL panes.
+local function wsl_distro(domain_name)
+  return domain_name and domain_name:match('^WSL:(.+)')
+end
+
+local function distro_icon(distro)
+  local d = distro:lower()
+  for _, e in ipairs(DISTROS) do
+    if e[2] and d:find(e[1], 1, true) then return e[2] end
+  end
+  return nf.linux_tux or ICON_TERM
+end
 
 -- Hour (1..12) -> matching clock-face glyph (sravioli's signature touch).
 local CLOCK = { 'one', 'two', 'three', 'four', 'five', 'six',
@@ -200,22 +227,23 @@ end
 
 -- Display path the way sravioli does: collapse $HOME to "~" (so C:\Users\hi -> ~),
 -- normalize WSL mount forms (/mnt/c/.. and /c/.. -> C:/..), shorten very long
--- paths to …/last2.
+-- paths to …/last2. `home` overrides $HOME (a WSL pane's Linux home).
 local HOME = (os.getenv('USERPROFILE') or os.getenv('HOME') or ''):gsub('\\', '/'):gsub('/+$', '')
-local function display_cwd(p)
+local function display_cwd(p, home)
   if not p or p == '' then return nil end
+  local h = home or HOME
   p = p:gsub('\\', '/')
   p = p:gsub('^/mnt/([A-Za-z])/', function(d) return d:upper() .. ':/' end) -- /mnt/c/.. -> C:/..
   p = p:gsub('^/([A-Za-z])/', function(d) return d:upper() .. ':/' end)     -- /c/..     -> C:/..
   p = p:gsub('^/([A-Za-z]:)', '%1')                                         -- /C:/..    -> C:/..
   p = p:gsub('/+$', '')
   if p == '' then return '/' end
-  if HOME ~= '' then
-    local pl, hl = p:lower(), HOME:lower()
+  if h ~= '' then
+    local pl, hl = p:lower(), h:lower()
     if pl == hl then
       p = '~'
-    elseif pl:sub(1, #HOME + 1) == hl .. '/' then
-      p = '~' .. p:sub(#HOME + 1)
+    elseif pl:sub(1, #h + 1) == hl .. '/' then
+      p = '~' .. p:sub(#h + 1)
     end
   end
   if #p > 28 then
@@ -244,9 +272,11 @@ local function tab_label(pane, explicit, max_width, tab_max_width, reserve)
   local word = raw:match('^(%S+)')
   local word_l = word and word:gsub('%.[Ee][Xx][Ee]$', ''):lower() or nil
 
-  -- process icon: title word > foreground exe > default terminal glyph.
-  -- Computed up front so even a RENAMED tab keeps its icon.
-  local pic = (word_l and PROGS[word_l]) or PROGS[exe_l] or ICON_TERM
+  -- process icon: title word > foreground exe > WSL distro logo > default
+  -- terminal glyph. Computed up front so even a RENAMED tab keeps its icon.
+  local distro = wsl_distro(pane.domain_name)
+  local pic = (word_l and PROGS[word_l]) or PROGS[exe_l]
+    or (distro and distro_icon(distro)) or ICON_TERM
 
   local label
   if explicit and #explicit > 0 then
@@ -341,13 +371,19 @@ function M.setup(config)
     local segs = {}
 
     local path, host = cwd_and_host(pane:get_current_working_dir())
-    local sp = display_cwd(path)
+    local distro = wsl_distro(pane:get_domain_name())
+    -- In WSL the cwd is the Linux path (from the shell's OSC 7), so "~" is
+    -- /home/<user>, not the Windows profile.
+    local sp = display_cwd(path, distro and path and path:match('^/home/[^/]+'))
     if sp then
       segs[#segs + 1] = { text = sp .. ' ' .. ICON_CWD, fg = INK, bg = TONE[1] }
     end
 
     host = host or wezterm.hostname()
-    if host and host ~= '' then
+    if distro then
+      -- WSL: the distro says more than the (shared) Windows hostname.
+      segs[#segs + 1] = { text = distro .. ' ' .. distro_icon(distro), fg = INK, bg = TONE[2] }
+    elseif host and host ~= '' then
       host = host:gsub('%..*$', '')           -- strip domain suffix
       host = host:gsub('^%l', string.upper)   -- capitalize (sravioli does this)
       segs[#segs + 1] = { text = host .. ' ' .. ICON_HOST, fg = INK, bg = TONE[2] }

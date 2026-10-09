@@ -9,6 +9,8 @@
 --   Ctrl+Shift+,   previous workspace
 --   Ctrl+Shift+.   next workspace
 --   Ctrl+Alt+W     rename the current workspace
+--   Ctrl+Shift+Q   pick a workspace and close it (everything in it), after
+--                  confirming; Shift+click / Shift+Enter closes without asking
 
 local wezterm = require('wezterm')
 local act = wezterm.action
@@ -44,11 +46,15 @@ local projects = {
     },
   },
   {
+    -- [Client][Server ]
+    --         [Server ]
     label = 'Fugitive-Club',
     workspace = 'fugitives.club',
+    cwd = path('jobs/altlantis/fugitive-club/Fugitive_Workspace'),
     panes = {
-      { id = 'edit', size = 0.50,  cwd = path('jobs/altlantis/fugitive-club/Fugitive_Server') },
-      { id = 'run',  from = 'edit', dir = 'Right', size = 0.50,  cwd = path('jobs/altlantis/fugitive-club/Fugitive_Client') },
+      { id = 'client', cwd = path('jobs/altlantis/fugitive-club/Fugitive_Workspace/Fugitive_Client') },
+      { id = 'server', from = 'client', dir = 'Right',  size = 0.50, cwd = path('jobs/altlantis/fugitive-club/Fugitive_Workspace/Fugitive_Server') },
+      { id = 'server2', from = 'server', dir = 'Bottom', size = 0.50, cwd = path('jobs/altlantis/fugitive-club/Fugitive_Workspace/Fugitive_Server') },
     },
   },
 }
@@ -122,14 +128,98 @@ local function picker(window, pane)
   )
 end
 
+-- ── Close a whole workspace ──────────────────────────────────────
+-- WezTerm has no "delete workspace": a workspace exists while it has panes,
+-- and Lua can't close panes. So each pane id goes to WezTerm's own CLI
+-- (`wezterm cli kill-pane`), which finds this instance through the
+-- WEZTERM_UNIX_SOCKET variable the GUI sets for its child processes.
+local WEZTERM_CLI = wezterm.executable_dir .. '/wezterm' .. (S.is_windows and '.exe' or '')
+
+local function panes_in(workspace)
+  local ids = {}
+  for _, win in ipairs(mux.all_windows()) do
+    if win:get_workspace() == workspace then
+      for _, tab in ipairs(win:tabs()) do
+        for _, p in ipairs(tab:panes()) do ids[#ids + 1] = p:pane_id() end
+      end
+    end
+  end
+  return ids
+end
+
+local function close_workspace(window, name)
+  local ids = panes_in(name)
+  -- Don't leave the window showing a workspace that's about to vanish.
+  if name == window:active_workspace() then
+    for _, other in ipairs(mux.get_workspace_names()) do
+      if other ~= name then
+        mux.set_active_workspace(other)
+        break
+      end
+    end
+  end
+  for _, id in ipairs(ids) do
+    wezterm.background_child_process({ WEZTERM_CLI, 'cli', 'kill-pane', '--pane-id', tostring(id) })
+  end
+end
+
+-- Pick a workspace, confirm, close it (default answer is "No"). Shift+click
+-- or Shift+Enter skips the confirmation: the selector accepts either, and
+-- the callback reads which modifiers are still held.
+local function close_picker(window, pane)
+  local names = mux.get_workspace_names()
+  if #names < 2 then
+    window:toast_notification('wezterm', "Can't close the only workspace", nil, 3000)
+    return
+  end
+  local current = window:active_workspace()
+  local choices = {}
+  for _, name in ipairs(names) do
+    local n = #panes_in(name)
+    table.insert(choices, {
+      id = name,
+      label = string.format('%s  (%d pane%s)%s', name, n, n == 1 and '' or 's',
+        name == current and '  <- current' or ''),
+    })
+  end
+  window:perform_action(
+    act.InputSelector({
+      title = ' Close workspace (Shift+click: no confirmation) ',
+      fuzzy = true,
+      choices = choices,
+      action = wezterm.action_callback(function(win, pn, name)
+        if not name then return end -- escape = cancel
+        if (win:keyboard_modifiers() or ''):find('SHIFT') then
+          close_workspace(win, name)
+          return
+        end
+        win:perform_action(
+          act.InputSelector({
+            title = ' Close "' .. name .. '" and everything running in it? ',
+            choices = { { id = 'no', label = 'No, keep it' }, { id = 'yes', label = 'Yes, close it' } },
+            action = wezterm.action_callback(function(w, _p, answer)
+              if answer == 'yes' then close_workspace(w, name) end
+            end),
+          }),
+          pn
+        )
+      end),
+    }),
+    pane
+  )
+end
+
 function M.apply(config)
   config.keys = config.keys or {}
 
   local extra = {
     { key = 'o', mods = 'CTRL|SHIFT', action = wezterm.action_callback(picker) },
     { key = 'l', mods = 'CTRL|SHIFT', action = act.ShowLauncherArgs({ flags = 'FUZZY|WORKSPACES' }) },
-    { key = ',', mods = 'CTRL|SHIFT', action = act.SwitchWorkspaceRelative(-1) },
-    { key = '.', mods = 'CTRL|SHIFT', action = act.SwitchWorkspaceRelative(1) },
+    -- phys: = the physical , and . keys. With Shift held they produce < and >,
+    -- so a plain ',' / '.' binding would never match.
+    { key = 'phys:Comma',  mods = 'CTRL|SHIFT', action = act.SwitchWorkspaceRelative(-1) },
+    { key = 'phys:Period', mods = 'CTRL|SHIFT', action = act.SwitchWorkspaceRelative(1) },
+    { key = 'q', mods = 'CTRL|SHIFT', action = wezterm.action_callback(close_picker) },
     { key = 'w', mods = 'CTRL|ALT', action = act.PromptInputLine({
         description = 'Rename workspace to: ',
         action = wezterm.action_callback(function(win, _pn, line)
