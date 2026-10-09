@@ -13,7 +13,11 @@
 local wezterm = require('wezterm')
 local act = wezterm.action
 local mux = wezterm.mux
+local S = require('settings')
 local M = {}
+
+-- A path under settings.projects_dir, so the same list works on every machine.
+local function path(rel) return S.projects_dir .. '/' .. rel end
 
 -- ════════════════════════════════════════════════════════════════
 --  YOUR PROJECTS  ← this is the only part you normally edit
@@ -27,12 +31,13 @@ local M = {}
 --   run   : a command to type & run there (optional)
 --   cwd   : override the project cwd for that pane (optional)
 --
--- Paths are WSL paths (e.g. /home/you/...), because WSL is the default.
+-- Wrap paths in path('...') so they're relative to settings.projects_dir
+-- (a WSL path on Windows, ~/Projects/project elsewhere by default).
 local projects = {
   {
     label = 'Mia Medical',
     workspace = 'mia_medical',
-    cwd = '/mnt/wsl/Projects/project/coderov/mia-medical', -- ← change to your real path
+    cwd = path('coderov/mia-medical'),
     panes = {
       { id = 'web',   from = 'edit', dir = 'Right',  size = 0.40,},
       { id = 'shell', from = 'web',  dir = 'Right', size = 0.45 },     -- spare shell
@@ -42,21 +47,21 @@ local projects = {
     label = 'Fugitive-Club',
     workspace = 'fugitives.club',
     panes = {
-      { id = 'edit', size = 0.50,  cwd = '/mnt/wsl/Projects/project/jobs/altlantis/fugitive-club/Fugitive_Server'  },
-      { id = 'run',  from = 'edit', dir = 'Right', size = 0.50,  cwd = '/mnt/wsl/Projects/project/jobs/altlantis/fugitive-club/Fugitive_Client' },
+      { id = 'edit', size = 0.50,  cwd = path('jobs/altlantis/fugitive-club/Fugitive_Server') },
+      { id = 'run',  from = 'edit', dir = 'Right', size = 0.50,  cwd = path('jobs/altlantis/fugitive-club/Fugitive_Client') },
     },
   },
 }
 
 -- ── Layout builder (you rarely need to touch below this line) ─────
 local function build(proj)
+  local specs = proj.panes or { { id = 'main' } }
   local _tab, base = mux.spawn_window({
     workspace = proj.workspace,
-    cwd = proj.cwd,
+    cwd = specs[1].cwd or proj.cwd,
   })
 
   local by_id = {}
-  local specs = proj.panes or { { id = 'main' } }
 
   by_id[specs[1].id or 1] = base
   if specs[1].run then base:send_text(specs[1].run .. '\n') end
@@ -67,6 +72,7 @@ local function build(proj)
     local p = src:split({
       direction = s.dir or 'Right',
       size = s.size or 0.5,
+      domain = 'CurrentPaneDomain', -- stay in WSL (without it, splits can be cmd.exe)
       cwd = s.cwd or proj.cwd,
     })
     by_id[s.id or i] = p
@@ -137,16 +143,21 @@ function M.apply(config)
     table.insert(config.keys, k)
   end
 
-  -- ── OPTIONAL: auto-open a project when WezTerm launches ─────────
-  -- Uncomment and pick the workspace you want to land in. Leaving it
-  -- commented just starts a plain default WSL window.
-  --
-  -- wezterm.on('gui-startup', function()
-  --   for _, p in ipairs(projects) do
-  --     if p.workspace == 'hedera' then build(p) end
-  --   end
-  --   mux.set_active_workspace('hedera')
-  -- end)
+  -- ── Auto-open a project when WezTerm launches ───────────────────
+  -- Set `startup_project` in settings.lua / machine.lua to a workspace id.
+  -- nil just starts a plain default-shell window.
+  if S.startup_project then
+    wezterm.on('gui-startup', function()
+      for _, p in ipairs(projects) do
+        if p.workspace == S.startup_project then
+          launch(p)
+          return
+        end
+      end
+      wezterm.log_warn('workspaces.lua: no project "' .. S.startup_project .. '"')
+      mux.spawn_window({})
+    end)
+  end
 end
 
 return M

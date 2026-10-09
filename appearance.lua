@@ -4,13 +4,9 @@
 
 local wezterm = require('wezterm')
 local P = require('palette')
+local S = require('settings') -- font, size, renderer + host OS
 
 local M = {}
-
--- Host OS, used to pick native-feeling window-button styling below.
-local triple = wezterm.target_triple
-local IS_WINDOWS = triple:find('windows') ~= nil
-local IS_MACOS   = triple:find('darwin') ~= nil
 
 -- Decide which background variant to use based on the OS theme.
 -- `wezterm.gui` is nil in the background mux process, so guard it.
@@ -30,18 +26,17 @@ function M.apply(config)
   local v = variant()
 
   -- ── Font ──
-  -- JetBrains Mono and "Symbols Nerd Font Mono" both ship WITH WezTerm,
-  -- so the icons in the bar work out of the box. Swap 'JetBrains Mono'
-  -- for any installed font you like (e.g. 'CaskaydiaCove Nerd Font').
+  -- Family and size come from settings.lua. "Symbols Nerd Font Mono" ships
+  -- WITH WezTerm, so the bar icons work even if the main font lacks them.
   config.font = wezterm.font_with_fallback({
-    { family = 'JetBrainsMono Nerd Font', weight = 'Regular' }, -- patched: JetBrains Mono + all icons
-    'Symbols Nerd Font Mono',                                   -- built-in safety net (rarely hit)
+    { family = S.font, weight = 'Regular' },
+    'Symbols Nerd Font Mono', -- built-in safety net (rarely hit)
   })
-  config.font_size = 11
+  config.font_size = S.font_size
   config.line_height = 1.1
   config.harfbuzz_features = { 'calt=1', 'liga=1' } -- ligatures on; set to 0 to turn off
 
-  -- ── Bottom-bar weight (terminal left untouched) ──
+  -- ── Bar weight (terminal left untouched) ──
   -- The retro tab bar shares this terminal font, so the only way to give the
   -- bar its own weight is a font_rule. bar.lua tags ALL of its text as
   -- Bold + Italic — a combination your shell prompt and program output don't
@@ -50,21 +45,24 @@ function M.apply(config)
   --   Want the bar heavier/lighter? change 'Medium' below.
   config.font_rules = {
     { intensity = 'Bold', italic = true,
-      font = wezterm.font({ family = 'JetBrainsMono Nerd Font', weight = 'Medium' }) },
+      font = wezterm.font({ family = S.font, weight = 'Medium' }) },
   }
 
   -- ── Rendering / performance ──
-  config.front_end = 'WebGpu' -- best on modern GPUs; switch to 'OpenGL' if you see glitches
-  config.max_fps = 120
-  config.animation_fps = 60
+  config.front_end = S.front_end
+  config.max_fps = 120 -- keep high: a frame can start sooner after each keystroke
+  -- No easing animations. With 60 here the blinking cursor FADES, which
+  -- repaints the whole window 60x/second while focused and idle — the main
+  -- GPU drain. At 1 (plus the Constant easing below) it's a hard on/off blink
+  -- that repaints only when the cursor actually toggles.
+  config.animation_fps = 1
 
   -- ── Window chrome ──
   -- Frameless (no native title bar — that one follows Windows and turns white
   -- in OS light mode, clashing with the dark theme). Instead the window buttons
   -- (min/max/close) are drawn INTO our own themed bar via INTEGRATED_BUTTONS.
-  -- WezTerm has only ONE bar and the buttons live inside it, so because the bar
-  -- now sits at the BOTTOM (tab_bar_at_bottom = true below), the buttons land at
-  -- the bottom-right alongside the status chain.
+  -- WezTerm has only ONE bar and the buttons live inside it, so they land at
+  -- the right end of the bar, wherever it sits (settings.bar_at_bottom).
   --
   -- Alternatives:
   --   'TITLE | RESIZE' -> native title bar (buttons top-right) BUT it can't be
@@ -73,13 +71,13 @@ function M.apply(config)
   config.window_decorations = 'INTEGRATED_BUTTONS | RESIZE'
   -- Draw the integrated buttons in the host OS's idiom: square on Windows,
   -- traffic-lights on macOS, GNOME-style elsewhere (Linux). The buttons still
-  -- live inside our themed bottom bar on every platform.
+  -- live inside our themed bar on every platform.
   config.integrated_title_button_style =
-    IS_WINDOWS and 'Windows'
-    or IS_MACOS and 'MacOsNative'
+    S.is_windows and 'Windows'
+    or S.is_macos and 'MacOsNative'
     or 'Gnome'
   config.integrated_title_buttons = { 'Hide', 'Maximize', 'Close' } -- minimize, maximize, close
-  config.integrated_title_button_alignment = 'Right'          -- bottom-right (bar is at the bottom)
+  config.integrated_title_button_alignment = 'Right'          -- right end of the bar
   config.integrated_title_button_color = 'auto'
 
   -- Default launch size, measured in character cells (columns x rows).
@@ -91,33 +89,37 @@ function M.apply(config)
   config.enable_scroll_bar = true
   config.default_cursor_style = 'BlinkingBlock' -- block that blinks
   config.cursor_blink_rate = 450                -- blink period in ms (lower = faster)
+  config.cursor_blink_ease_in = 'Constant'      -- hard blink, no fade (see animation_fps)
+  config.cursor_blink_ease_out = 'Constant'
   config.inactive_pane_hsb = { saturation = 0.9, brightness = 0.65 } -- dim unfocused split panes
   config.scrollback_lines = 10000
 
   -- ── Tab bar -> our themed status panel ──
-  -- RETRO tab bar (not fancy): it renders the bar as terminal CELLS using the
-  -- main font, which is what lets bar.lua draw the seamless sravioli-style
-  -- powerline — slanted tabs and the gradient status chain. (The fancy tab bar
-  -- draws rounded "pills" instead and can't reproduce that look.)
-  -- It lives at the BOTTOM; the integrated window buttons travel down with it.
-  --   Want the bar back at the TOP? set tab_bar_at_bottom = false.
-  config.use_fancy_tab_bar = false
-  config.tab_bar_at_bottom = true        -- <- bar (and buttons) at the BOTTOM
+  -- settings.fancy_tabs picks the bar:
+  --   RETRO (default): the bar is terminal CELLS in the main font, which is
+  --     what lets bar.lua draw seamless sravioli-style slanted tabs — but
+  --     WezTerm has no × button on that bar.
+  --   FANCY: WezTerm draws rounded tabs, each with a × close button, in
+  --     window_frame's font; tab colors come from colors.tab_bar.
+  -- Top or bottom comes from settings.bar_at_bottom; the integrated window
+  -- buttons travel with it.
+  config.use_fancy_tab_bar = S.fancy_tabs
+  config.tab_bar_at_bottom = S.bar_at_bottom
   config.hide_tab_bar_if_only_one_tab = false -- keep the bar (and clock) visible always
   -- The "+" new-tab button is enabled AND styled in bar.lua (it runs last and
   -- owns config.tab_bar_style), so it's intentionally not set here.
   config.show_tab_index_in_tab_bar = false    -- bar.lua draws its own numbered tabs
   config.tab_max_width = 32
 
-  -- window_frame styles the fancy tab bar / resize border. With the retro bar
-  -- the panel color comes from colors.tab_bar.background (below) instead, but
-  -- this is kept harmless for the resize border + light/dark button contrast.
+  -- window_frame styles the fancy tab bar (its ONE font for tabs + status, and
+  -- the panel color) and the window buttons. With the retro bar the panel
+  -- color comes from colors.tab_bar.background (below) instead.
   config.window_frame = {
     font = wezterm.font_with_fallback({
-      { family = 'JetBrainsMono Nerd Font', weight = 'Regular' }, -- patched: JetBrains Mono + all icons
+      { family = S.font, weight = 'Regular' },
       'Symbols Nerd Font Mono', -- built-in safety net
     }),
-    font_size = 11,
+    font_size = S.bar_font_size or S.font_size - 2, -- smaller font = slimmer fancy bar
     active_titlebar_bg   = P.bar.bg,
     inactive_titlebar_bg = P.bar.bg,
     active_titlebar_fg   = P.bar.fg,
@@ -141,14 +143,18 @@ function M.apply(config)
     ansi = P.ansi,
     brights = P.brights,
 
-    -- Tab bar colors are pinned dark so the panel never goes light.
+    -- Tab bar colors are pinned dark so the panel never goes light. The tab
+    -- fills match the retro bar's (accent / slate / lifted-on-hover with dark
+    -- ink); the fancy bar paints tabs and their × with these, while retro
+    -- tabs paint their own colors in bar.lua.
     tab_bar = {
       background = P.bar.bg,
-      active_tab        = { bg_color = P.bar.bg, fg_color = P.accent, intensity = 'Bold' },
-      inactive_tab      = { bg_color = P.bar.bg, fg_color = P.bar.fg_dim },
-      inactive_tab_hover= { bg_color = P.bar.bg, fg_color = v.fg },
-      new_tab           = { bg_color = P.bar.bg, fg_color = P.bar.fg_dim },
-      new_tab_hover     = { bg_color = P.bar.bg, fg_color = v.fg },
+      active_tab         = { bg_color = P.accent,      fg_color = P.bar.bg },
+      inactive_tab       = { bg_color = P.brights[1], fg_color = P.bar.bg },
+      inactive_tab_hover = { bg_color = P.subtle,      fg_color = P.bar.bg },
+      inactive_tab_edge  = P.bar.bg, -- thin divider between inactive tabs
+      new_tab            = { bg_color = P.brights[1], fg_color = P.bar.fg },
+      new_tab_hover      = { bg_color = P.subtle,      fg_color = P.bar.bg },
     },
   }
 end

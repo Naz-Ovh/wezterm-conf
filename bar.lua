@@ -1,7 +1,9 @@
 -- ~/.config/wezterm/bar.lua
 --
--- A faithful, self-contained port of the sravioli/wezterm RETRO powerline bar,
--- pinned to the BOTTOM of the window (https://github.com/sravioli/wezterm).
+-- A faithful, self-contained port of the sravioli/wezterm RETRO powerline bar
+-- (https://github.com/sravioli/wezterm). Top or bottom: settings.bar_at_bottom.
+-- With settings.fancy_tabs = true the tabs are WezTerm's rounded ones with a
+-- × close button instead of slanted; everything else below is the same.
 -- Reading left -> right:
 --
 --    workspace      <- rounded pill; becomes a COPY / SEARCH pill in that mode
@@ -17,6 +19,7 @@
 local wezterm = require('wezterm')
 local nf = wezterm.nerdfonts
 local P = require('palette')
+local S = require('settings') -- fancy_tabs: rounded tabs with × vs slanted retro tabs
 local M = {}
 
 -- ── Separators (sravioli's exact set) ─────────────────────────────
@@ -231,7 +234,7 @@ end
 -- icon + directory — exactly the "default terminal icon" sravioli shows.
 local NOISE = { wslhost = true, wsl = true, [''] = true }
 
-local function tab_label(pane, explicit, max_width, tab_max_width)
+local function tab_label(pane, explicit, max_width, tab_max_width, reserve)
   local raw = (pane.title or ''):gsub('^Copy mode: ', '')
 
   local exe   = basename(pane.foreground_process_name or '')
@@ -269,11 +272,14 @@ local function tab_label(pane, explicit, max_width, tab_max_width)
 
   local text = pic .. ' ' .. label
 
-  -- truncate only when we're at the configured cap (sravioli's rule)
+  -- Truncate only when the whole tab would exceed its width, capped at
+  -- tab_max_width (sravioli's rule). `reserve` = cells the caller adds around
+  -- this text (number, edges). Measured in cells, not bytes: the icons are
+  -- multi-byte but one cell wide.
   local cap = tab_max_width or 32
-  local room = (max_width and math.min(max_width, cap) or cap) - 4
-  if room > 1 and #text > room then
-    text = wezterm.truncate_right(text, room) .. '…'
+  local room = (max_width and math.min(max_width, cap) or cap) - reserve
+  if room > 1 and wezterm.column_width(text) > room then
+    text = wezterm.truncate_right(text, room - 1) .. '…'
   end
   return text
 end
@@ -362,24 +368,13 @@ function M.setup(config)
     window:set_right_status(render_right(segs))
   end)
 
-  -- Slanted tabs. The active tab fills with the accent color; inactive tabs are
-  -- a subtle slate. The tab NUMBER is always shown (so tabs stay distinguishable
+  -- Tabs. The active tab fills with the accent color; inactive tabs are a
+  -- subtle slate. The tab NUMBER is always shown (so tabs stay distinguishable
   -- even when several share a directory); a small dot trails the label of a
   -- background tab that has produced new output.
   wezterm.on('format-tab-title', function(tab, tabs, panes, conf, hover, max_width)
     local idx    = tab.tab_index
     local active = tab.is_active
-
-    -- fill color (sravioli draws the tab in its "foreground" color)
-    local fill
-    if active then
-      fill = P.accent
-    elseif hover then
-      fill = P.subtle
-    else
-      fill = P.brights[1]
-    end
-    local ink = P.bar.bg
 
     -- unseen output on a background tab -> trailing activity dot
     local unseen = false
@@ -391,8 +386,31 @@ function M.setup(config)
     end
 
     local num   = num_icon(idx + 1)
-    local label = tab_label(tab.active_pane, tab.tab_title, max_width, conf and conf.tab_max_width)
+    -- Cells around the label: "N " on the fancy bar; edge + " N " + " " +
+    -- edge on the retro bar; plus " ●" when there's unseen output.
+    local reserve = wezterm.column_width(num) + (S.fancy_tabs and 1 or 6)
+      + (unseen and 2 or 0)
+    local label = tab_label(tab.active_pane, tab.tab_title, max_width,
+      conf and conf.tab_max_width, reserve)
     if unseen then label = label .. ' ' .. ICON_NOTIFY end
+
+    -- Fancy bar: plain text. WezTerm draws the rounded tab, its × button and
+    -- the colors (colors.tab_bar in appearance.lua) itself.
+    if S.fancy_tabs then
+      return num .. ' ' .. label
+    end
+
+    -- Retro bar: slanted tabs. Fill color (sravioli draws the tab in its
+    -- "foreground" color).
+    local fill
+    if active then
+      fill = P.accent
+    elseif hover then
+      fill = P.subtle
+    else
+      fill = P.brights[1]
+    end
+    local ink = P.bar.bg
 
     -- Medium weight for the whole tab (Bold+Italic tag -> font_rules)
     local out = medium()

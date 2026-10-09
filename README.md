@@ -1,9 +1,15 @@
-# WezTerm config (modular, WSL-default, Warp-style keys)
+# WezTerm config (modular, cross-platform, Warp-style keys)
 
-## Install (Windows)
+Works unchanged on **Windows + WSL** (any distro), **native Linux** and
+**macOS**. Everything machine-dependent is a variable in `settings.lua` and is
+auto-detected, so there's nothing to set up per machine.
 
-WezTerm is a **Windows** app, so the config lives in your **Windows** home,
-NOT inside WSL. Put all the `.lua` files in:
+## Install
+
+On Linux/macOS put the `.lua` files in `~/.config/wezterm/`.
+
+On Windows, WezTerm is a **Windows** app, so the config lives in your
+**Windows** home, NOT inside WSL. Put all the `.lua` files in:
 
 ```
 C:\Users\<YOU>\.config\wezterm\
@@ -21,9 +27,11 @@ Final layout:
 ```
 C:\Users\<YOU>\.config\wezterm\
 ├─ wezterm.lua      # entry point (don't really need to touch)
+├─ settings.lua     # ← every machine-dependent variable (auto-detected)
+├─ machine.lua      # ← OPTIONAL per-machine overrides (git-ignored)
 ├─ palette.lua      # ← colors live here
 ├─ appearance.lua   # fonts, window chrome, window buttons, light/dark
-├─ domains.lua      # ← set your WSL distro name here
+├─ domains.lua      # default shell: WSL on Windows, login shell elsewhere
 ├─ keymaps.lua      # Warp-style shortcuts
 ├─ workspaces.lua   # ← your projects + the project picker
 └─ bar.lua          # the themed status panel (pills)
@@ -31,11 +39,31 @@ C:\Users\<YOU>\.config\wezterm\
 
 ## First steps
 
-1. Open `domains.lua`, set `WSL_DISTRO` to your distro
-   (run `wsl -l -q` in PowerShell to see the exact name).
-2. Launch WezTerm. It should drop you straight into WSL with the themed bar
-   (tabs + status + window buttons) across the top.
-3. Edit any file and save — it reloads live. Or press `Ctrl+Shift+R`.
+1. Launch WezTerm. On Windows it drops you straight into WSL — it prefers a
+   distro matching `Fedora`, then `Ubuntu`, else whichever is installed. On
+   Linux/macOS you get your login shell.
+2. Edit any file and save — it reloads live. Or press `Ctrl+Shift+R`.
+
+## Per-machine settings
+
+`settings.lua` holds the variables: `wsl_distros`, `shell`, `projects_dir`,
+`startup_project`, `font`, `font_size`, `front_end`, `bar_at_bottom`,
+`fancy_tabs`. Don't edit it per
+machine — create a `machine.lua` next to it returning only what differs:
+
+```lua
+-- machine.lua (git-ignored)
+return {
+  wsl_distros = { 'Ubuntu' },      -- prefer Ubuntu on this PC (false = PowerShell)
+  shell = { 'fish', '-l' },        -- instead of the login shell
+  projects_dir = '/home/me/code',
+  startup_project = 'mia_medical', -- open this workspace at launch
+  font_size = 12,
+}
+```
+
+Every installed WSL distro is always available from the launcher: right-click
+the `+` button in the tab bar.
 
 ## Customizing
 
@@ -50,25 +78,29 @@ C:\Users\<YOU>\.config\wezterm\
   (e.g. `#1b1c25`). Lower it toward `#000000` to make it blacker.
 - **Window buttons + dragging + bar position.** WezTerm has only ONE bar (the
   tab bar), and both the status pills and the window buttons live inside it —
-  so they always sit together, at the top or at the bottom. Two knobs in
-  `appearance.lua` control this:
-  - `window_decorations`:
+  so they always sit together, at the top or at the bottom. Two knobs
+  control this:
+  - `window_decorations` (`appearance.lua`):
     - `'INTEGRATED_BUTTONS | RESIZE'` *(default)* — frameless, themed buttons
       drawn into our own bar. No white native title bar. Tweak which buttons
       show via `integrated_title_buttons`.
     - `'TITLE | RESIZE'` — native title bar (buttons top-right) but it follows
       Windows and goes **white in OS light mode**, clashing with the theme.
     - `'RESIZE'` — totally bare, no buttons.
-  - `tab_bar_at_bottom`:
-    - `false` *(default)* — bar + buttons at the **top** (Warp-style).
+  - `bar_at_bottom` (`settings.lua` / `machine.lua`):
+    - `false` *(default)* — bar + buttons at the **top** (Warp-style). Safer:
+      the bar can't slide under the taskbar or off screen.
     - `true` — bar + buttons at the **bottom**.
+- **Window lost under the taskbar / off screen?** `Ctrl+Alt+Enter` toggles
+  maximize (Windows' own `Win+Up` / `Win+Down` work too).
 
 ## Notes
 
 - The path pill needs your WSL shell to emit OSC 7 (most modern prompts —
   starship, oh-my-zsh, etc. — already do). If it's blank, the pill just hides.
-- Fonts: `JetBrains Mono` + `Symbols Nerd Font Mono` ship with WezTerm, so
-  icons work with no extra install.
+- Fonts: the default `JetBrainsMono Nerd Font` must be installed; without it
+  WezTerm falls back to its built-in JetBrains Mono, and `Symbols Nerd Font
+  Mono` (also built in) keeps the icons working. Change `font` per machine.
 
 ## Session save/restore — removed
 

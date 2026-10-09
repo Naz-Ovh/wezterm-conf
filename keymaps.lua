@@ -19,38 +19,50 @@ local wezterm = require('wezterm')
 local act = wezterm.action
 local M = {}
 
--- ── Why new tabs/splits need special handling on Windows ──────────────
+-- ── Why new tabs/splits need special handling in WSL ──────────────────
 -- A FRESH window lands in your Linux $HOME because the WSL domain's
--- default_cwd = '~' (domains.lua) is passed verbatim to `wsl --cd ~`, and a
--- fresh window has no parent pane to inherit from. A NEW TAB can't reuse that:
--- per WezTerm's rules it resolves cwd from the current pane FIRST (before
--- default_cwd ever applies), and a WSL pane reports its directory as the
--- Windows-mapped /mnt/c/... path — so the tab lands there.
+-- default_cwd = '~' (domains.lua) is passed to `wsl --cd ~`. A NEW TAB or
+-- SPLIT doesn't get that: WezTerm first inherits the current pane's cwd, and
+-- a WSL pane reports it as the Windows-side /mnt/c/... path, so it lands there.
 --
--- The only thing that overrides that inheritance is an explicit cwd, and it
--- must be the ABSOLUTE Linux path: for an explicit spawn cwd WezTerm expands
--- '~' to the *Windows* home (C:\Users\you) before launching wsl, so '~' would
--- give /mnt/c. We can't discover the real path without a child process — which
--- is illegal at config-load (yields) and doesn't run in key callbacks — so it's
--- set here as a one-line constant. Off Windows it stays nil and tabs/splits
+-- An explicit cwd = '~' overrides that inheritance and also goes to
+-- `wsl --cd ~`, i.e. your Linux $HOME whatever the distro or username. Outside
+-- WSL (native Linux/macOS, a PowerShell tab) cwd stays nil and new panes
 -- inherit the current directory like a normal terminal.
-local IS_WINDOWS = wezterm.target_triple:find('windows') ~= nil
--- 👇 Your WSL home. Change it if your Linux username isn't 'bns'
---    (run `wsl -- bash -c 'echo $HOME'` to check).
-local WSL_HOME = IS_WINDOWS and '~' or nil
-
--- New tab in the WSL home (Windows) / current dir elsewhere. Spawns via mux so
--- the absolute cwd goes straight to `wsl --cd /home/...`, like a fresh launch.
-local function spawn_tab_home(window, _pane)
-  window:mux_window():spawn_tab({ cwd = WSL_HOME }) -- nil => inherit/default cwd
+local function home_cwd(pane)
+  if pane:get_domain_name():find('^WSL:') then return '~' end
 end
 
--- Split helper: same path, so a new pane also opens in WSL_HOME on Windows
--- (and inherits the current dir on Linux/macOS, where WSL_HOME is nil).
+-- New tab in your default shell (domains.lua). Used by Ctrl+T, Ctrl+Shift+T
+-- and the "+" button, so every way of opening a tab lands in the same place.
+local function spawn_tab_home(window, pane)
+  window:mux_window():spawn_tab({ domain = 'DefaultDomain', cwd = home_cwd(pane) })
+end
+
+-- New window, same rule (WezTerm's own SpawnWindow would inherit /mnt/c/...).
+local function spawn_window_home(_window, pane)
+  wezterm.mux.spawn_window({ domain = 'DefaultDomain', cwd = home_cwd(pane) })
+end
+
+-- Split helper: the new pane runs in the SAME shell/distro as the current
+-- one. The explicit domain matters: without it a split from a WSL pane can
+-- come up as cmd.exe.
 local function split_home(direction)
   return wezterm.action_callback(function(_window, pane)
-    pane:split({ direction = direction, cwd = WSL_HOME })
+    pane:split({ direction = direction, domain = 'CurrentPaneDomain', cwd = home_cwd(pane) })
   end)
+end
+
+-- Maximize <-> restore. Also rescues a window that slid under the taskbar or
+-- off screen. WezTerm can't report "maximized", so a window (nearly) as wide
+-- as its screen counts as maximized; the slack absorbs frame/border pixels.
+local function toggle_maximize(window, _pane)
+  local screen = wezterm.gui.screens().active
+  if window:get_dimensions().pixel_width >= screen.width - 32 then
+    window:restore()
+  else
+    window:maximize()
+  end
 end
 
 -- Ctrl+C that copies a selection if you have one, else sends a real SIGINT.
@@ -67,10 +79,12 @@ end
 function M.apply(config)
   config.keys = {
     -- ── Tabs ───────────────────────────────────────────────
-    -- Ctrl+T opens a new tab in the WSL home (Windows) / current dir (elsewhere).
+    -- Ctrl+T opens a new tab in the WSL home (in WSL) / current dir (elsewhere).
     { key = 't',   mods = 'CTRL',       action = wezterm.action_callback(spawn_tab_home) },
-    -- Ctrl+W closes the current tab immediately without asking for confirmation.
-    { key = 'w',   mods = 'CTRL',       action = act.CloseCurrentTab({ confirm = false }) },
+    -- Ctrl+Shift+T (WezTerm's own new-tab key) does the same instead of inheriting /mnt/c/...
+    { key = 't',   mods = 'CTRL|SHIFT', action = wezterm.action_callback(spawn_tab_home) },
+    -- Ctrl+W closes the current tab AFTER confirming.
+    { key = 'w',   mods = 'CTRL',       action = act.CloseCurrentTab({ confirm = true }) },
     -- Ctrl+Shift+E renames the current tab (the name sticks and shows in the bar).
     { key = 'e',   mods = 'CTRL|SHIFT', action = act.PromptInputLine({
         description = 'Rename tab (empty = clear):',
@@ -93,15 +107,18 @@ function M.apply(config)
     { key = '{',   mods = 'CTRL|SHIFT', action = act.MoveTabRelative(-1) },
 
     -- ── Windows ────────────────────────────────────────────
-    -- Ctrl+Shift+N opens a new WezTerm window.
-    { key = 'n', mods = 'CTRL|SHIFT', action = act.SpawnWindow },
+    -- Ctrl+Shift+N opens a new WezTerm window (in the WSL home, like Ctrl+T).
+    { key = 'n', mods = 'CTRL|SHIFT', action = wezterm.action_callback(spawn_window_home) },
+    -- Ctrl+Alt+Enter maximizes the window, or restores it if already maximized.
+    { key = 'Enter', mods = 'CTRL|ALT', action = wezterm.action_callback(toggle_maximize) },
 
     -- ── Panes / splits ─────────────────────────────────────
     -- Ctrl+Shift+D splits the current pane horizontally, creating a pane on the right.
     { key = 'd',     mods = 'CTRL|SHIFT', action = split_home('Right') },
     -- Ctrl+Alt+D splits the current pane vertically, creating a pane below.
     { key = 'd',     mods = 'CTRL|ALT',   action = split_home('Bottom') },
-    -- Ctrl+Shift+W closes the current pane immediately without asking for confirmation.
+    -- Ctrl+Shift+W closes the current pane immediately, no confirmation (an
+    -- unsplit tab closes with it).
     { key = 'w',     mods = 'CTRL|SHIFT', action = act.CloseCurrentPane({ confirm = false }) },
     -- Ctrl+Shift+Enter maximizes the current pane or restores it if already zoomed.
     { key = 'Enter', mods = 'CTRL|SHIFT', action = act.TogglePaneZoomState },
@@ -181,6 +198,20 @@ function M.apply(config)
   end
 
   config.disable_default_key_bindings = false -- keep WezTerm's other sensible defaults
+
+  -- Confirmation (Ctrl+W, middle-clicking a tab, a fancy-bar ×) is
+  -- skipped only when the pane runs nothing but a plain shell. To Windows a
+  -- WSL pane is always wsl.exe, so in WSL it always asks — intentionally.
+
+  -- The "+" button: left-click opens a tab exactly like Ctrl+T (WezTerm's
+  -- default would inherit /mnt/c/...). Right-click keeps the launcher, where
+  -- you can pick another WSL distro.
+  wezterm.on('new-tab-button-click', function(window, pane, button, _default_action)
+    if button == 'Left' then
+      spawn_tab_home(window, pane)
+      return false -- skip the default SpawnTab
+    end
+  end)
 
   -- ─────────────────────────────────────────────────────────
   -- WANT IT *EXACTLY* LIKE WARP? (overrides shell keys — your call)
