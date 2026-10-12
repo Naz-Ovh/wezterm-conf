@@ -65,6 +65,15 @@ local function toggle_maximize(window, _pane)
   end
 end
 
+-- Quit all local workspaces, including hidden ones. Only this action bypasses
+-- window confirmation; ordinary window/tab close keeps its safety prompt.
+local function quit_without_confirmation(window, pane)
+  local overrides = window:get_config_overrides() or {}
+  overrides.window_close_confirmation = 'NeverPrompt'
+  window:set_config_overrides(overrides)
+  window:perform_action(act.QuitApplication, pane)
+end
+
 -- Ctrl+C that copies a selection if you have one, else sends a real SIGINT.
 local function smart_copy_or_interrupt(window, pane)
   local sel = window:get_selection_text_for_pane(pane)
@@ -107,6 +116,9 @@ function M.apply(config)
     { key = '{',   mods = 'CTRL|SHIFT', action = act.MoveTabRelative(-1) },
 
     -- ── Windows ────────────────────────────────────────────
+    -- Destructive: quit the entire app, not just the visible workspace.
+    { key = 'F4', mods = 'ALT', action = wezterm.action_callback(quit_without_confirmation) },
+    { key = 'q', mods = 'CTRL|ALT|SHIFT', action = wezterm.action_callback(quit_without_confirmation) },
     -- Ctrl+Shift+N opens a new WezTerm window (in the WSL home, like Ctrl+T).
     { key = 'n', mods = 'CTRL|SHIFT', action = wezterm.action_callback(spawn_window_home) },
     -- Ctrl+Alt+Enter maximizes the window, or restores it if already maximized.
@@ -226,13 +238,15 @@ function M.apply(config)
   -- skipped only when the pane runs nothing but a plain shell. To Windows a
   -- WSL pane is always wsl.exe, so in WSL it always asks — intentionally.
 
-  -- The "+" button: left-click opens a tab exactly like Ctrl+T (WezTerm's
-  -- default would inherit /mnt/c/...). Right-click keeps the launcher, where
-  -- you can pick another WSL distro.
+  -- The "+" button: left-click opens a tab exactly like Ctrl+T.
+  -- workspaces.lua handles right-click; middle-click opens the shell launcher.
   wezterm.on('new-tab-button-click', function(window, pane, button, _default_action)
     if button == 'Left' then
       spawn_tab_home(window, pane)
       return false -- skip the default SpawnTab
+    elseif button == 'Middle' then
+      window:perform_action(act.ShowLauncherArgs({ flags = 'FUZZY|DOMAINS|LAUNCH_MENU' }), pane)
+      return false
     end
   end)
 

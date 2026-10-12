@@ -6,7 +6,7 @@
 -- × close button instead of slanted; everything else below is the same.
 -- Reading left -> right:
 --
---    workspace      <- rounded pill; becomes a COPY / SEARCH pill in that mode
+--    workspace [N]   <- rounded pill; becomes a COPY / SEARCH pill in that mode
 --   1   2  ...     <- slanted tabs; each shows the running program's ICON
 --   ...............  <- empty fill (the bar background)
 --             cwd  host  clock  battery   <- right chain on a brightening gradient
@@ -363,7 +363,9 @@ function M.setup(config)
       window:set_left_status(render_pill(ICON_FIND .. ' SEARCH', P.accent, P.bar.bg))
     else
       local ws = window:active_workspace()
-      window:set_left_status(render_pill(ICON_WS .. ' ' .. ws, P.brights[7], P.bar.bg))
+      local count = #wezterm.mux.get_workspace_names()
+      window:set_left_status(render_pill(string.format('%s %s [%d]', ICON_WS, ws, count),
+        P.brights[7], P.bar.bg))
     end
 
     -- RIGHT: cwd · host · clock · battery. Each label is followed by its icon

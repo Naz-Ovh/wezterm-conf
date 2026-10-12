@@ -6,6 +6,7 @@
 -- Keys this adds:
 --   Ctrl+Shift+O   open a project from your list (builds it, or jumps to it)
 --   Ctrl+Shift+L   fuzzy-switch between workspaces that are already OPEN
+--   Right-click +   same open-workspace picker, with count and pane totals
 --   Ctrl+Shift+,   previous workspace
 --   Ctrl+Shift+.   next workspace
 --   Ctrl+Alt+W     rename the current workspace
@@ -128,6 +129,39 @@ local function picker(window, pane)
   )
 end
 
+-- ── Switch between open workspaces (keyboard and tab-bar menu) ─────
+local function switch_picker(window, pane)
+  local names = mux.get_workspace_names()
+  table.sort(names)
+  local current = window:active_workspace()
+  local counts = {}
+  for _, win in ipairs(mux.all_windows()) do
+    local name = win:get_workspace()
+    counts[name] = counts[name] or 0
+    for _, tab in ipairs(win:tabs()) do
+      counts[name] = counts[name] + #tab:panes()
+    end
+  end
+
+  local choices = {}
+  for _, name in ipairs(names) do
+    local n = counts[name] or 0
+    choices[#choices + 1] = {
+      id = name,
+      label = string.format('%s  (%d pane%s)%s', name, n, n == 1 and '' or 's',
+        name == current and '  <- current' or ''),
+    }
+  end
+  window:perform_action(act.InputSelector({
+    title = string.format(' Switch workspace (%d open) ', #names),
+    fuzzy = true,
+    choices = choices,
+    action = wezterm.action_callback(function(_win, _pn, name)
+      if name and exists(name) then mux.set_active_workspace(name) end
+    end),
+  }), pane)
+end
+
 -- ── Close a whole workspace ──────────────────────────────────────
 -- WezTerm has no "delete workspace": a workspace exists while it has panes,
 -- and Lua can't close panes. So each pane id goes to WezTerm's own CLI
@@ -214,7 +248,7 @@ function M.apply(config)
 
   local extra = {
     { key = 'o', mods = 'CTRL|SHIFT', action = wezterm.action_callback(picker) },
-    { key = 'l', mods = 'CTRL|SHIFT', action = act.ShowLauncherArgs({ flags = 'FUZZY|WORKSPACES' }) },
+    { key = 'l', mods = 'CTRL|SHIFT', action = wezterm.action_callback(switch_picker) },
     -- phys: = the physical , and . keys. With Shift held they produce < and >,
     -- so a plain ',' / '.' binding would never match.
     { key = 'phys:Comma',  mods = 'CTRL|SHIFT', action = act.SwitchWorkspaceRelative(-1) },
@@ -232,6 +266,13 @@ function M.apply(config)
   for _, k in ipairs(extra) do
     table.insert(config.keys, k)
   end
+
+  wezterm.on('new-tab-button-click', function(window, pane, button)
+    if button == 'Right' then
+      switch_picker(window, pane)
+      return false
+    end
+  end)
 
   -- ── Auto-open a project when WezTerm launches ───────────────────
   -- Set `startup_project` in settings.lua / machine.lua to a workspace id.

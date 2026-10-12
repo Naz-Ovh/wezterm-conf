@@ -62,8 +62,33 @@ return {
 }
 ```
 
-Every installed WSL distro is always available from the launcher: right-click
-the `+` button in the tab bar.
+Every installed WSL distro is always available from the shell launcher:
+**middle-click the `+` button** in the tab bar. Left-click opens a new tab;
+right-click opens the workspace switcher.
+
+## Quit everything and switch workspaces
+
+| Control | Action |
+| --- | --- |
+| `Alt+F4` or `Ctrl+Alt+Shift+Q` | Quit this WezTerm instance, including all hidden local workspaces, **without confirmation** |
+| Window close button (`×`) | Close the current window with the normal safety prompt; not a global quit |
+| Right-click `+` | Show all open workspaces, their pane counts, and the current-workspace marker; click a row to switch |
+| `Ctrl+Shift+L` | Open the same searchable workspace switcher |
+| `Ctrl+Shift+,` / `Ctrl+Shift+.` | Previous / next workspace |
+| `Ctrl+Shift+O` | Open a configured project layout, or switch to it if already open |
+| `Ctrl+Shift+Q` | Pick one workspace to close, with confirmation (Shift+select skips it) |
+
+The left status pill shows the current workspace and total open count, e.g.
+`mia_medical [3]`. It updates every second; copy/search mode temporarily shows
+its original mode indicator instead. On WezTerm 20240203 the status pill itself
+is display-only; right-click the original `+` button for mouse switching.
+Both retro and fancy tab bars support the button's mouse actions.
+
+**Warning:** the quit shortcuts close terminal sessions abruptly, so unsaved
+work can be lost. They do not send a graceful `Ctrl+C` to every program, shut
+down WSL itself, or guarantee that detached jobs, services, Docker containers,
+or independent tmux/remote mux sessions stop. Independently started WezTerm
+instances are not affected. Ordinary tab/window close prompts remain enabled.
 
 ## Customizing
 
