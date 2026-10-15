@@ -42,6 +42,11 @@ local S = {
   -- (WebGpu queues frames there); macOS gets 'WebGpu' because it runs on Metal.
   -- Needs a full WezTerm restart to switch.
   front_end = OS == 'macos' and 'WebGpu' or 'OpenGL',
+  -- Ligatures (=> != ->) need HarfBuzz to reshape every changed line; off is
+  -- snappier when typing/scrolling. true = turn them back on.
+  ligatures = false,
+  -- A blinking cursor repaints the window on every blink; false = steady block.
+  cursor_blink = false,
   -- Tab/status bar (and the min/max/close buttons) at the bottom instead of
   -- the top. Top is safer: the bar can't slide under the taskbar or off screen.
   bar_at_bottom = false,

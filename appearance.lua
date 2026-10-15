@@ -34,7 +34,9 @@ function M.apply(config)
   })
   config.font_size = S.font_size
   config.line_height = 1.1
-  config.harfbuzz_features = { 'calt=1', 'liga=1' } -- ligatures on; set to 0 to turn off
+  -- settings.ligatures toggles them (off = less shaping work per keystroke)
+  config.harfbuzz_features = S.ligatures and { 'calt=1', 'liga=1' }
+    or { 'calt=0', 'clig=0', 'liga=0' }
 
   -- ── Bar weight (terminal left untouched) ──
   -- The retro tab bar shares this terminal font, so the only way to give the
@@ -87,7 +89,7 @@ function M.apply(config)
   config.window_padding = { left = 14, right = 14, top = 10, bottom = 6 }
   config.window_background_opacity = 1.0 -- set e.g. 0.96 for slight transparency
   config.enable_scroll_bar = true
-  config.default_cursor_style = 'BlinkingBlock' -- block that blinks
+  config.default_cursor_style = S.cursor_blink and 'BlinkingBlock' or 'SteadyBlock'
   config.cursor_blink_rate = 450                -- blink period in ms (lower = faster)
   config.cursor_blink_ease_in = 'Constant'      -- hard blink, no fade (see animation_fps)
   config.cursor_blink_ease_out = 'Constant'

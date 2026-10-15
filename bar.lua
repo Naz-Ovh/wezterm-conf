@@ -265,7 +265,10 @@ local NOISE = { wslhost = true, wsl = true, [''] = true }
 local function tab_label(pane, explicit, max_width, tab_max_width, reserve)
   local raw = (pane.title or ''):gsub('^Copy mode: ', '')
 
-  local exe   = basename(pane.foreground_process_name or '')
+  -- foreground_process_name is lazy and costs a process-tree walk on Windows.
+  -- In a WSL pane it's always the wsl.exe bridge (noise), so skip it there.
+  local distro = wsl_distro(pane.domain_name)
+  local exe   = distro and '' or basename(pane.foreground_process_name or '')
   local exe_l = exe:gsub('%.[Ee][Xx][Ee]$', ''):lower()
 
   -- leading word of the OSC title (sravioli detects the process this way too)
@@ -274,7 +277,6 @@ local function tab_label(pane, explicit, max_width, tab_max_width, reserve)
 
   -- process icon: title word > foreground exe > WSL distro logo > default
   -- terminal glyph. Computed up front so even a RENAMED tab keeps its icon.
-  local distro = wsl_distro(pane.domain_name)
   local pic = (word_l and PROGS[word_l]) or PROGS[exe_l]
     or (distro and distro_icon(distro)) or ICON_TERM
 
@@ -313,6 +315,9 @@ local function tab_label(pane, explicit, max_width, tab_max_width, reserve)
   end
   return text
 end
+
+-- Desktops have no battery: probe once at load instead of every status tick.
+local HAS_BATTERY = #(wezterm.battery_info() or {}) > 0
 
 function M.setup(config)
   config.status_update_interval = 1000 -- refresh the clock / battery every second
@@ -396,7 +401,7 @@ function M.setup(config)
       fg = INK, bg = TONE[3],
     }
 
-    local batts = wezterm.battery_info()
+    local batts = HAS_BATTERY and wezterm.battery_info()
     if batts and #batts > 0 then
       local b = batts[1]
       local pct = math.floor(b.state_of_charge * 100 + 0.5)
