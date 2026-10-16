@@ -93,7 +93,7 @@ function M.apply(config)
 
   config.window_padding = { left = 14, right = 14, top = 10, bottom = 6 }
   config.window_background_opacity = 1.0 -- set e.g. 0.96 for slight transparency
-  config.enable_scroll_bar = S.scroll_bar
+  config.enable_scroll_bar = S.scroll_bar == true -- 'auto' starts hidden (scrollbar.lua)
   config.default_cursor_style = S.cursor_blink and 'BlinkingBlock' or 'SteadyBlock'
   config.cursor_blink_rate = 450                -- blink period in ms (lower = faster)
   config.cursor_blink_ease_in = 'Constant'      -- hard blink, no fade (see animation_fps)

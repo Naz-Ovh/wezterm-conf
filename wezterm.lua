@@ -11,6 +11,7 @@
 --   keymaps.lua     -> Warp-style keyboard shortcuts
 --   workspaces.lua  -> projects-as-workspaces + the project picker
 --   bar.lua         -> the themed status panel (pills) + tab styling
+--   scrollbar.lua   -> scrollbar only when there is history to scroll
 
 local wezterm = require('wezterm')
 local config = wezterm.config_builder() -- validates keys & gives nicer errors
@@ -23,5 +24,6 @@ require('domains').apply(config)
 require('keymaps').apply(config)    -- everyday keys (must come before workspaces/session)
 require('workspaces').apply(config) -- adds project + workspace keys
 require('bar').setup(config)
+require('scrollbar').setup(config) -- scroll_bar = 'auto' in settings.lua
 
 return config
