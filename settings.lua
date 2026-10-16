@@ -40,8 +40,12 @@ local S = {
   font_size = OS == 'macos' and 14 or 11, -- macOS points render smaller (72 vs 96 dpi)
   -- Renderer. 'OpenGL' usually has lower typing latency on Windows/Linux
   -- (WebGpu queues frames there); macOS gets 'WebGpu' because it runs on Metal.
+  -- On Windows 'WebGpu' means DirectX 12 on the discrete GPU (see
+  -- appearance.lua) - worth comparing on the nightly build.
   -- Needs a full WezTerm restart to switch.
   front_end = OS == 'macos' and 'WebGpu' or 'OpenGL',
+  -- Scrollbar on the right edge; off = one less thing to redraw while scrolling.
+  scroll_bar = false,
   -- Ligatures (=> != ->) need HarfBuzz to reshape every changed line; off is
   -- snappier when typing/scrolling. true = turn them back on.
   ligatures = false,

@@ -52,7 +52,12 @@ function M.apply(config)
 
   -- ── Rendering / performance ──
   config.front_end = S.front_end
-  config.max_fps = 120 -- keep high: a frame can start sooner after each keystroke
+  -- WebGpu only: always the discrete GPU (RTX), never an integrated or
+  -- virtual adapter (e.g. MuMuPlayer's display driver).
+  config.webgpu_power_preference = 'HighPerformance'
+  -- A cap, not a target: above the monitor's refresh rate it costs nothing,
+  -- and a frame never waits on the limiter after a keystroke.
+  config.max_fps = 240
   -- No easing animations. With 60 here the blinking cursor FADES, which
   -- repaints the whole window 60x/second while focused and idle — the main
   -- GPU drain. At 1 (plus the Constant easing below) it's a hard on/off blink
@@ -88,7 +93,7 @@ function M.apply(config)
 
   config.window_padding = { left = 14, right = 14, top = 10, bottom = 6 }
   config.window_background_opacity = 1.0 -- set e.g. 0.96 for slight transparency
-  config.enable_scroll_bar = true
+  config.enable_scroll_bar = S.scroll_bar
   config.default_cursor_style = S.cursor_blink and 'BlinkingBlock' or 'SteadyBlock'
   config.cursor_blink_rate = 450                -- blink period in ms (lower = faster)
   config.cursor_blink_ease_in = 'Constant'      -- hard blink, no fade (see animation_fps)
