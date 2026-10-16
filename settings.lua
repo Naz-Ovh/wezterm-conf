@@ -44,8 +44,8 @@ local S = {
   -- appearance.lua) - worth comparing on the nightly build.
   -- Needs a full WezTerm restart to switch.
   front_end = OS == 'macos' and 'WebGpu' or 'OpenGL',
-  -- Scrollbar on the right edge; off = one less thing to redraw while scrolling.
-  scroll_bar = false,
+  -- Scrollbar on the right edge (false = one less thing to redraw).
+  scroll_bar = true,
   -- Ligatures (=> != ->) need HarfBuzz to reshape every changed line; off is
   -- snappier when typing/scrolling. true = turn them back on.
   ligatures = false,

@@ -29,7 +29,7 @@ function M.apply(config)
   -- Family and size come from settings.lua. "Symbols Nerd Font Mono" ships
   -- WITH WezTerm, so the bar icons work even if the main font lacks them.
   config.font = wezterm.font_with_fallback({
-    { family = S.font, weight = 'Regular' },
+    { family = S.font, weight = 'Medium' }, -- normal text at Medium weight
     'Symbols Nerd Font Mono', -- built-in safety net (rarely hit)
   })
   config.font_size = S.font_size
