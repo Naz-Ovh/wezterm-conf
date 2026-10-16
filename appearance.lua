@@ -146,7 +146,7 @@ function M.apply(config)
     cursor_border = P.cursor,
     selection_bg = P.sel_bg,
     selection_fg = '#ffffff',
-    scrollbar_thumb = P.muted, -- the draggable scrollbar handle (right edge) — kept faint so it doesn't fight the minimal look
+    scrollbar_thumb = P.scrollbar, -- the draggable handle (right edge); see palette.lua
     ansi = P.ansi,
     brights = P.brights,
 

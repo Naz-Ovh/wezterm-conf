@@ -26,6 +26,10 @@ return {
   subtle  = '#6b7089', -- low-contrast text
   cursor  = '#8b8d94', -- dim white (block cursor fill)
   sel_bg  = '#283457', -- text selection background
+  -- Scrollbar thumb (the track is the terminal background). #414868 is the
+  -- palette's slate (inactive tabs): 2.1:1 on dim, 2.35:1 on black - clearly
+  -- visible but quiet. Brighter: '#565f89' (3.0:1). Too faint: '#2a2d3a' (1.4:1).
+  scrollbar = '#414868',
 
   -- ── ANSI 16-color palette (what programs / your prompt use) ──
   ansi = {

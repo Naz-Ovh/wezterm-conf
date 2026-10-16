@@ -44,8 +44,10 @@ local S = {
   -- appearance.lua) - worth comparing on the nightly build.
   -- Needs a full WezTerm restart to switch.
   front_end = OS == 'macos' and 'WebGpu' or 'OpenGL',
-  -- Scrollbar on the right edge:
-  --   'auto' = only when there is history to scroll (scrollbar.lua)
+  -- Scrollbar on the right edge. Its track is the terminal background, so
+  -- only the thumb (palette.scrollbar) is ever visible.
+  --   'auto' = only when there is history (scrollbar.lua). With nothing to
+  --            scroll, WezTerm would draw the thumb full-height; this hides it.
   --   true   = always    false = never
   scroll_bar = 'auto',
   -- Ligatures (=> != ->) need HarfBuzz to reshape every changed line; off is
