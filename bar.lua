@@ -225,6 +225,22 @@ local function cwd_and_host(uri)
   return (s:gsub('^file://[^/]*', '')), s:match('^file://([^/]*)')    -- older: string
 end
 
+-- pane:get_current_working_dir() is cheap when the shell reports its cwd
+-- (OSC 7), but otherwise walks the Windows process tree: ~10 ms, spikes to
+-- 30+ ms (measured). update-status fires up to ~10x/s during output, so ask
+-- at most once per second per pane - the bar only refreshes each second.
+local cwd_cache = {}
+local function pane_cwd(pane)
+  local id, now = pane:pane_id(), os.time()
+  local c = cwd_cache[id]
+  if not (c and c.at == now) then
+    local path, host = cwd_and_host(pane:get_current_working_dir())
+    c = { at = now, path = path, host = host }
+    cwd_cache[id] = c
+  end
+  return c.path, c.host
+end
+
 -- Display path the way sravioli does: collapse $HOME to "~" (so C:\Users\hi -> ~),
 -- normalize WSL mount forms (/mnt/c/.. and /c/.. -> C:/..), shorten very long
 -- paths to …/last2. `home` overrides $HOME (a WSL pane's Linux home).
@@ -377,7 +393,7 @@ function M.setup(config)
     -- (sravioli puts the glyph on the RIGHT), brightening toward the edge.
     local segs = {}
 
-    local path, host = cwd_and_host(pane:get_current_working_dir())
+    local path, host = pane_cwd(pane)
     local distro = wsl_distro(pane:get_domain_name())
     -- In WSL the cwd is the Linux path (from the shell's OSC 7), so "~" is
     -- /home/<user>, not the Windows profile.
